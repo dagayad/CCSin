@@ -1,0 +1,6 @@
+{
+  "name": "SinCC",
+  "description": "AI-Powered Sinhala & English Video Caption Studio for Reels, Shorts & TikTok",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

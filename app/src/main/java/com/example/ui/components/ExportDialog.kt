@@ -73,12 +73,15 @@ import com.example.ui.theme.TextSecondary
 import kotlinx.coroutines.delay
 
 @Composable
+@OptIn(androidx.media3.common.util.UnstableApi::class)
 fun ExportDialog(
     isOpen: Boolean,
     projectTitle: String,
     aspectRatioStr: String,
     captions: List<CaptionItem>,
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
+    sourceVideoUri: android.net.Uri? = null,
+    style: com.example.data.model.CaptionStyle = com.example.data.model.CaptionStyle()
 ) {
     if (!isOpen) return
 
@@ -96,6 +99,46 @@ fun ExportDialog(
     var isRenderComplete by remember { mutableStateOf(false) }
 
     val animatedProgress by animateFloatAsState(targetValue = renderProgress, label = "renderProgress")
+
+    // Real MP4 export (Media3 Transformer) with captions burned into the frames
+    var transformer by remember { mutableStateOf<androidx.media3.transformer.Transformer?>(null) }
+    var outputFile by remember { mutableStateOf<java.io.File?>(null) }
+    var renderError by remember { mutableStateOf<String?>(null) }
+
+    LaunchedEffect(isRendering, transformer) {
+        val running = transformer ?: return@LaunchedEffect
+        while (isRendering) {
+            renderProgress = com.example.data.export.VideoExporter.progressOf(running)
+            delay(250L)
+        }
+    }
+
+    val startExport: () -> Unit = {
+        val source = sourceVideoUri
+        if (source == null) {
+            renderError = "Load a video first to export an MP4. SRT/VTT export works without a video."
+        } else {
+            renderError = null
+            isRenderComplete = false
+            renderProgress = 0f
+            renderStageText = "Exporting MP4 with captions..."
+            val dir = context.getExternalFilesDir(android.os.Environment.DIRECTORY_MOVIES) ?: context.filesDir
+            val file = java.io.File(dir, "SinCC_${System.currentTimeMillis()}.mp4")
+            isRendering = true
+            transformer = com.example.data.export.VideoExporter.start(context, source, captions, style, file) { result ->
+                isRendering = false
+                result.fold(
+                    onSuccess = {
+                        outputFile = it
+                        renderProgress = 1f
+                        renderStageText = "MP4 ready"
+                        isRenderComplete = true
+                    },
+                    onFailure = { renderError = "Export failed: ${it.message ?: "unknown error"}" }
+                )
+            }
+        }
+    }
 
     // NOTE: Burned-in video export is NOT implemented yet. The old version only faked progress
     // with delays and never wrote a file. The render button stays disabled until a real
@@ -273,11 +316,16 @@ fun ExportDialog(
                         Spacer(modifier = Modifier.height(12.dp))
                     }
 
+                    renderError?.let { message ->
+                        Text(message, fontSize = 11.sp, color = Color(0xFFFF3B30))
+                        Spacer(modifier = Modifier.height(8.dp))
+                    }
+
                     // Render or Share Action Button
                     if (!isRenderComplete) {
                         Button(
-                            onClick = { },
-                            enabled = false,
+                            onClick = startExport,
+                            enabled = !isRendering && sourceVideoUri != null,
                             colors = ButtonDefaults.buttonColors(containerColor = NeonCyan, contentColor = Color.White),
                             shape = RoundedCornerShape(10.dp),
                             modifier = Modifier
@@ -288,7 +336,7 @@ fun ExportDialog(
                             Icon(Icons.Default.Movie, contentDescription = null, modifier = Modifier.size(18.dp))
                             Spacer(modifier = Modifier.width(6.dp))
                             Text(
-                                "Video export coming soon (use SRT/VTT)",
+                                if (isRendering) "Exporting ${(animatedProgress * 100).toInt()}%..." else "Export MP4 with captions",
                                 fontFamily = OutfitFontFamily,
                                 fontWeight = FontWeight.Bold
                             )
@@ -299,17 +347,31 @@ fun ExportDialog(
                             modifier = Modifier.fillMaxWidth()
                         ) {
                             OutlinedButton(
-                                onClick = { isRendering = true },
+                                onClick = startExport,
                                 modifier = Modifier.weight(1f)
                             ) {
                                 Text("Re-Render", fontSize = 11.sp)
                             }
                             Button(
                                 onClick = {
-                                    val sendIntent: Intent = Intent().apply {
-                                        action = Intent.ACTION_SEND
-                                        putExtra(Intent.EXTRA_TEXT, "Created with SinCC Studio: $projectTitle ($selectedResolution $selectedFps)")
-                                        type = "text/plain"
+                                    val mp4 = outputFile
+                                    val sendIntent: Intent = if (mp4 != null && mp4.exists()) {
+                                        val uri = androidx.core.content.FileProvider.getUriForFile(
+                                            context,
+                                            "${context.packageName}.fileprovider",
+                                            mp4
+                                        )
+                                        Intent(Intent.ACTION_SEND).apply {
+                                            type = "video/mp4"
+                                            putExtra(Intent.EXTRA_STREAM, uri)
+                                            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                        }
+                                    } else {
+                                        Intent().apply {
+                                            action = Intent.ACTION_SEND
+                                            putExtra(Intent.EXTRA_TEXT, "Created with SinCC Studio: $projectTitle")
+                                            type = "text/plain"
+                                        }
                                     }
                                     context.startActivity(Intent.createChooser(sendIntent, "Share SinCC Video"))
                                 },

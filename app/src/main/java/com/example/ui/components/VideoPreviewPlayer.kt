@@ -30,10 +30,19 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Fullscreen
+import androidx.compose.material.icons.filled.FullscreenExit
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Replay
 import androidx.compose.material.icons.filled.Shield
+import androidx.compose.material.icons.filled.VolumeOff
+import androidx.compose.material.icons.filled.VolumeUp
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Slider
@@ -97,7 +106,7 @@ import com.example.ui.theme.StudioSurfaceVariant
 fun VideoPreviewPlayer(
     captions: List<CaptionItem>,
     style: CaptionStyle,
-    currentPlayheadMs: Long,
+    vmPlayheadMs: Long,
     totalDurationMs: Long,
     isPlaying: Boolean,
     aspectRatioStr: String = "9:16",
@@ -106,8 +115,17 @@ fun VideoPreviewPlayer(
     onSeek: (Long) -> Unit,
     onRestart: () -> Unit,
     onToggleSafeZone: () -> Unit,
+    isFullscreenMode: Boolean = false,
+    onExitFullscreen: () -> Unit = {},
+    onPlaybackPosition: (Long) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
+    // The video's own position is the playhead while a video is loaded (see TextureVideoPlayer)
+    var videoPosMs by remember(videoUri) { mutableStateOf(-1L) }
+    var isFullscreen by remember { mutableStateOf(false) }
+    var restartNonce by remember { mutableStateOf(0) }
+    val currentPlayheadMs = if (videoUri != null && videoPosMs >= 0L) videoPosMs else vmPlayheadMs
+
     // Optimized active caption lookup
     val activeCaption by remember(captions, currentPlayheadMs) {
         derivedStateOf {
@@ -150,6 +168,39 @@ fun VideoPreviewPlayer(
 
 
 
+    // Fullscreen: the same preview again, filling the screen. Only one player is alive at a time,
+    // so the normal stage stops its video while this dialog is open (no double audio).
+    val exitFullscreen: () -> Unit = {
+        isFullscreen = false
+        onSeek(videoPosMs.coerceAtLeast(0L))
+    }
+    if (isFullscreen && !isFullscreenMode) {
+        Dialog(
+            onDismissRequest = exitFullscreen,
+            properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)
+        ) {
+            Box(modifier = Modifier.fillMaxSize().background(Color.Black)) {
+                VideoPreviewPlayer(
+                    captions = captions,
+                    style = style,
+                    vmPlayheadMs = currentPlayheadMs,
+                    totalDurationMs = totalDurationMs,
+                    isPlaying = isPlaying,
+                    aspectRatioStr = aspectRatioStr,
+                    videoUri = videoUri,
+                    onPlayPauseToggle = onPlayPauseToggle,
+                    onSeek = onSeek,
+                    onRestart = onRestart,
+                    onToggleSafeZone = onToggleSafeZone,
+                    isFullscreenMode = true,
+                    onExitFullscreen = exitFullscreen,
+                    onPlaybackPosition = { videoPosMs = it },
+                    modifier = Modifier.fillMaxSize()
+                )
+            }
+        }
+    }
+
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         modifier = modifier
@@ -160,6 +211,7 @@ fun VideoPreviewPlayer(
         BoxWithConstraints(
             contentAlignment = Alignment.Center,
             modifier = Modifier
+                .then(if (isFullscreenMode) Modifier.weight(1f) else Modifier)
                 .fillMaxWidth()
                 .clip(RoundedCornerShape(20.dp))
                 .background(Color(0xFF09080F))
@@ -182,8 +234,10 @@ fun VideoPreviewPlayer(
 
             Box(
                 modifier = Modifier
-                    .height(responsiveHeight)
-                    .aspectRatio(ratio)
+                    .then(
+                        if (isFullscreenMode) Modifier.fillMaxSize()
+                        else Modifier.height(responsiveHeight).aspectRatio(ratio)
+                    )
                     .clip(RoundedCornerShape(16.dp))
                     .background(
                         Brush.verticalGradient(
@@ -196,12 +250,18 @@ fun VideoPreviewPlayer(
                     )
                     .testTag("video_player_stage")
             ) {
-                if (videoUri != null) {
+                if (videoUri != null && !isFullscreen) {
                     // Real user-uploaded video playback via hardware-accelerated TextureView
                     TextureVideoPlayer(
                         videoUri = videoUri,
                         isPlaying = isPlaying,
-                        currentPlayheadMs = currentPlayheadMs,
+                        seekTargetMs = vmPlayheadMs,
+                        seekKey = restartNonce,
+                        isMuted = VideoAudioState.isMuted,
+                        onPositionChange = { pos ->
+                            videoPosMs = pos
+                            onPlaybackPosition(pos)
+                        },
                         modifier = Modifier.fillMaxSize()
                     )
                 } else {
@@ -423,7 +483,10 @@ fun VideoPreviewPlayer(
             Spacer(modifier = Modifier.width(6.dp))
 
             IconButton(
-                onClick = onRestart,
+                onClick = {
+                    restartNonce++ // forces the video to seek to 0 even if the playhead was already 0
+                    onRestart()
+                },
                 modifier = Modifier.size(34.dp)
             ) {
                 Icon(
@@ -460,6 +523,38 @@ fun VideoPreviewPlayer(
             )
 
             Spacer(modifier = Modifier.width(4.dp))
+
+            if (videoUri != null) {
+                IconButton(
+                    onClick = { VideoAudioState.isMuted = !VideoAudioState.isMuted },
+                    modifier = Modifier
+                        .size(34.dp)
+                        .testTag("mute_video_button")
+                ) {
+                    Icon(
+                        imageVector = if (VideoAudioState.isMuted) Icons.Default.VolumeOff else Icons.Default.VolumeUp,
+                        contentDescription = if (VideoAudioState.isMuted) "Unmute" else "Mute",
+                        tint = if (VideoAudioState.isMuted) Color(0xFFFF3B30) else Color.LightGray,
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
+
+                IconButton(
+                    onClick = { if (isFullscreenMode) onExitFullscreen() else isFullscreen = true },
+                    modifier = Modifier
+                        .size(34.dp)
+                        .testTag("fullscreen_video_button")
+                ) {
+                    Icon(
+                        imageVector = if (isFullscreenMode) Icons.Default.FullscreenExit else Icons.Default.Fullscreen,
+                        contentDescription = if (isFullscreenMode) "Exit fullscreen" else "Fullscreen",
+                        tint = Color.LightGray,
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
+
+                Spacer(modifier = Modifier.width(4.dp))
+            }
 
             IconButton(
                 onClick = onToggleSafeZone,
@@ -553,67 +648,103 @@ private fun MotionCanvasBackground(isPlaying: Boolean) {
     }
 }
 
+
+/** Mute is app-wide, so the choice holds in the normal preview and in fullscreen. */
+object VideoAudioState {
+    var isMuted by mutableStateOf(false)
+}
+
+private fun seekPlayer(mp: MediaPlayer, ms: Long) {
+    val target = ms.coerceAtLeast(0L)
+    try {
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+            mp.seekTo(target, MediaPlayer.SEEK_CLOSEST)
+        } else {
+            mp.seekTo(target.toInt())
+        }
+    } catch (_: Exception) {}
+}
+
+/**
+ * Plays the uploaded video. The video is the clock while it plays: it reports its position
+ * through [onPositionChange], and captions follow that. [seekTargetMs] only seeks the video
+ * when it changes (slider drag, restart), so the two clocks never fight each other.
+ */
 @Composable
 private fun TextureVideoPlayer(
     videoUri: Uri,
     isPlaying: Boolean,
-    currentPlayheadMs: Long,
+    seekTargetMs: Long,
+    seekKey: Int,
+    isMuted: Boolean,
+    onPositionChange: (Long) -> Unit,
     modifier: Modifier = Modifier
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
-    val mediaPlayer = remember { MediaPlayer() }
+    var player by remember { mutableStateOf<MediaPlayer?>(null) }
     var isPrepared by remember { mutableStateOf(false) }
 
+    // Latest values for callbacks that run after this composition has moved on
+    val startAtMs by rememberUpdatedState(seekTargetMs)
+    val playingNow by rememberUpdatedState(isPlaying)
+    val mutedNow by rememberUpdatedState(isMuted)
+    val surfaceRef = remember { java.util.concurrent.atomic.AtomicReference<android.view.Surface?>(null) }
+
+    // One MediaPlayer per video. It is created and released together with this composable,
+    // so reopening fullscreen or changing the video never reuses a released player.
     DisposableEffect(videoUri) {
         isPrepared = false
+        val mp = MediaPlayer()
+        player = mp
         try {
-            mediaPlayer.reset()
-            mediaPlayer.setDataSource(context, videoUri)
-            mediaPlayer.isLooping = true
-            mediaPlayer.setOnPreparedListener {
+            mp.setDataSource(context, videoUri)
+            mp.isLooping = true
+            mp.setOnPreparedListener { p ->
+                p.setVolume(if (mutedNow) 0f else 1f)
+                seekPlayer(p, startAtMs)
+                surfaceRef.get()?.let { p.setSurface(it) }
                 isPrepared = true
-                if (isPlaying) {
-                    it.start()
-                }
+                if (playingNow) p.start()
             }
-            mediaPlayer.prepareAsync()
+            mp.prepareAsync()
         } catch (e: Exception) {
             Log.e("TextureVideoPlayer", "Error preparing video", e)
         }
 
         onDispose {
-            try {
-                if (mediaPlayer.isPlaying) {
-                    mediaPlayer.stop()
-                }
-                mediaPlayer.release()
-            } catch (_: Exception) {}
+            player = null
+            try { mp.setSurface(null) } catch (_: Exception) {}
+            try { mp.release() } catch (_: Exception) {}
         }
     }
 
     LaunchedEffect(isPlaying, isPrepared) {
+        val mp = player ?: return@LaunchedEffect
         if (!isPrepared) return@LaunchedEffect
         try {
-            if (isPlaying) {
-                if (!mediaPlayer.isPlaying) mediaPlayer.start()
-            } else {
-                if (mediaPlayer.isPlaying) mediaPlayer.pause()
-            }
+            if (isPlaying && !mp.isPlaying) mp.start()
+            if (!isPlaying && mp.isPlaying) mp.pause()
         } catch (_: Exception) {}
     }
 
-    LaunchedEffect(currentPlayheadMs) {
-        if (!isPrepared || isPlaying) return@LaunchedEffect
-        try {
-            val currentPos = mediaPlayer.currentPosition
-            if (kotlin.math.abs(currentPos - currentPlayheadMs) > 400) {
-                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
-                    mediaPlayer.seekTo(currentPlayheadMs, MediaPlayer.SEEK_CLOSEST)
-                } else {
-                    mediaPlayer.seekTo(currentPlayheadMs.toInt())
-                }
-            }
-        } catch (_: Exception) {}
+    LaunchedEffect(seekTargetMs, seekKey, isPrepared) {
+        val mp = player ?: return@LaunchedEffect
+        if (isPrepared) seekPlayer(mp, seekTargetMs)
+    }
+
+    LaunchedEffect(isMuted, isPrepared) {
+        if (!isPrepared) return@LaunchedEffect
+        player?.let { mp -> runCatching { mp.setVolume(if (isMuted) 0f else 1f) } }
+    }
+
+    // Report the video's real position about 30 times a second while playing, and less often
+    // while paused. Compose skips work when the value is unchanged.
+    LaunchedEffect(isPrepared) {
+        if (!isPrepared) return@LaunchedEffect
+        while (isActive) {
+            player?.let { mp -> runCatching { onPositionChange(mp.currentPosition.toLong()) } }
+            delay(if (playingNow) 33L else 150L)
+        }
     }
 
     AndroidView(
@@ -621,18 +752,16 @@ private fun TextureVideoPlayer(
             TextureView(ctx).apply {
                 surfaceTextureListener = object : TextureView.SurfaceTextureListener {
                     override fun onSurfaceTextureAvailable(st: SurfaceTexture, width: Int, height: Int) {
-                        try {
-                            val surface = Surface(st)
-                            mediaPlayer.setSurface(surface)
-                        } catch (_: Exception) {}
+                        val s = android.view.Surface(st)
+                        surfaceRef.getAndSet(s)?.release()
+                        player?.let { mp -> runCatching { mp.setSurface(s) } }
                     }
 
                     override fun onSurfaceTextureSizeChanged(st: SurfaceTexture, width: Int, height: Int) {}
 
                     override fun onSurfaceTextureDestroyed(st: SurfaceTexture): Boolean {
-                        try {
-                            mediaPlayer.setSurface(null)
-                        } catch (_: Exception) {}
+                        player?.let { mp -> runCatching { mp.setSurface(null) } }
+                        surfaceRef.getAndSet(null)?.release()
                         return true
                     }
 
@@ -643,5 +772,3 @@ private fun TextureVideoPlayer(
         modifier = modifier
     )
 }
-
-

@@ -25,6 +25,13 @@ import java.util.UUID
 
 class StudioViewModel(application: Application) : AndroidViewModel(application) {
 
+    init {
+        // Load uploaded fonts in the background so the first preview frame doesn't stutter
+        viewModelScope.launch {
+            com.example.data.font.FontManager.preloadCustomFonts(application)
+        }
+    }
+
     private val repository = ProjectRepository(application)
     private val aiService = CaptionAiService(application)
 
@@ -298,6 +305,11 @@ class StudioViewModel(application: Application) : AndroidViewModel(application) 
     private fun startPlayback() {
         _isPlaying.value = true
         playbackJob?.cancel()
+        playbackJob = null
+        // With a real video loaded, the video player is the clock: it reports its own position
+        // to the preview, so this timer must not also tick (two clocks drift and captions lag).
+        if (_selectedVideoUri.value != null) return
+
         playbackJob = viewModelScope.launch {
             val stepMs = 33L
             var lastTime = System.currentTimeMillis()

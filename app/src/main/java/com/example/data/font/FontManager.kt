@@ -32,9 +32,31 @@ data class CustomFontModel(
 
 object FontManager {
 
-    private val customFontCache = mutableMapOf<String, FontFamily>()
-    private val customTypefaceCache = mutableMapOf<String, Typeface>()
-    private val legacyFmOverrides = mutableMapOf<String, Boolean>()
+    // Concurrent maps: fonts are now loaded on a background thread and read from the UI thread.
+    private val customFontCache = java.util.concurrent.ConcurrentHashMap<String, FontFamily>()
+    private val customTypefaceCache = java.util.concurrent.ConcurrentHashMap<String, Typeface>()
+    private val legacyFmOverrides = java.util.concurrent.ConcurrentHashMap<String, Boolean>()
+
+    // Parsing a font's cmap table reads the whole file. Cache the answer per file version so
+    // composables and the font list never re-read the same font on every recomposition.
+    private val cmapCache = java.util.concurrent.ConcurrentHashMap<String, Boolean>()
+
+    /** Loads every uploaded font off the main thread, so the first caption frame doesn't stall. */
+    suspend fun preloadCustomFonts(context: Context) = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+        val files = getFontDir(context).listFiles { _, n -> n.endsWith(".ttf", true) || n.endsWith(".otf", true) }
+        files?.forEach { f ->
+            try {
+                if (!customFontCache.containsKey(f.name)) {
+                    val tf = customTypefaceCache[f.name]
+                        ?: Typeface.createFromFile(f).also { customTypefaceCache[f.name] = it }
+                    customFontCache[f.name] = FontFamily(tf)
+                }
+                hasSinhalaUnicodeInCmap(f)
+            } catch (e: Exception) {
+                Log.w(TAG, "Preload failed for ${f.name}", e)
+            }
+        }
+    }
 
     fun getFontDir(context: Context): File {
         val dir = File(context.filesDir, "custom_fonts")
@@ -48,6 +70,13 @@ object FontManager {
      * to valid, non-zero glyph indices.
      */
     fun hasSinhalaUnicodeInCmap(file: File): Boolean {
+        if (!file.exists()) return false
+        val key = "${file.absolutePath}|${file.lastModified()}|${file.length()}"
+        cmapCache[key]?.let { return it }
+        return parseSinhalaCmap(file).also { cmapCache[key] = it }
+    }
+
+    private fun parseSinhalaCmap(file: File): Boolean {
         if (!file.exists() || file.length() < 12) return false
         return try {
             RandomAccessFile(file, "r").use { raf ->
@@ -259,6 +288,22 @@ object FontManager {
                 // Fallback to Noto Sans Sinhala for best glyph support
                 NotoSansSinhalaFontFamily
             }
+        }
+    }
+
+    /**
+     * Raw Android Typeface for a font id (used by the MP4 exporter, which draws with Android text APIs).
+     * Returns null when the id is not an uploaded font; built-in fonts are resolved by the caller.
+     */
+    fun uploadedTypeface(context: Context, fontId: String): Typeface? {
+        customTypefaceCache[fontId]?.let { return it }
+        val file = File(getFontDir(context), fontId)
+        if (!file.exists()) return null
+        return try {
+            Typeface.createFromFile(file).also { customTypefaceCache[fontId] = it }
+        } catch (e: Exception) {
+            Log.e(TAG, "Could not read font ${file.name}", e)
+            null
         }
     }
 

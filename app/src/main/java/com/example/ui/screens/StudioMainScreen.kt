@@ -192,7 +192,7 @@ fun StudioMainScreen(
                                 VideoPreviewPlayer(
                                     captions = captions,
                                     style = style,
-                                    currentPlayheadMs = currentPlayheadMs,
+                                    vmPlayheadMs = currentPlayheadMs,
                                     totalDurationMs = totalDurationMs,
                                     isPlaying = isPlaying,
                                     aspectRatioStr = currentProject?.aspectRatio ?: "9:16",
@@ -250,7 +250,7 @@ fun StudioMainScreen(
                             VideoPreviewPlayer(
                                 captions = captions,
                                 style = style,
-                                currentPlayheadMs = currentPlayheadMs,
+                                vmPlayheadMs = currentPlayheadMs,
                                 totalDurationMs = totalDurationMs,
                                 isPlaying = isPlaying,
                                 aspectRatioStr = currentProject?.aspectRatio ?: "9:16",
@@ -293,7 +293,7 @@ fun StudioMainScreen(
                                 VideoPreviewPlayer(
                                     captions = captions,
                                     style = style,
-                                    currentPlayheadMs = currentPlayheadMs,
+                                    vmPlayheadMs = currentPlayheadMs,
                                     totalDurationMs = totalDurationMs,
                                     isPlaying = isPlaying,
                                     aspectRatioStr = currentProject?.aspectRatio ?: "9:16",
@@ -372,7 +372,9 @@ fun StudioMainScreen(
         projectTitle = currentProject?.title ?: "SinCC Reel",
         aspectRatioStr = currentProject?.aspectRatio ?: "9:16",
         captions = captions,
-        onDismiss = { viewModel.isExportDialogOpen.value = false }
+        onDismiss = { viewModel.isExportDialogOpen.value = false },
+        sourceVideoUri = selectedVideoUri,
+        style = style
     )
 }
 

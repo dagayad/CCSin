@@ -107,6 +107,11 @@ dependencies {
   implementation(libs.androidx.room.runtime)
   // implementation(libs.coil.compose)
   implementation(libs.converter.moshi)
+  // MP4 export with burned-in captions (Media3 Transformer + text overlay)
+  implementation(libs.androidx.media3.common)
+  implementation(libs.androidx.media3.effect)
+  implementation(libs.androidx.media3.transformer)
+  implementation(libs.guava)
   implementation(libs.firebase.ai)
   // Uncomment to use Firestore:
   // implementation(libs.firebase.firestore)

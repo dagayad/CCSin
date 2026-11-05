@@ -323,4 +323,41 @@ object SinhalaUnicodeConverter {
     fun splitWords(text: String): List<String> {
         return text.trim().split("\\s+".toRegex()).filter { it.isNotEmpty() }
     }
+
+    /** One run of characters that all use the same font: Sinhala or not. */
+    data class ScriptRun(val text: String, val isSinhala: Boolean)
+
+    /**
+     * Splits a word into runs of Sinhala and non-Sinhala characters, so a token like
+     * "AIය" becomes [AI (English font), ය (Sinhala font)]. Digits and punctuation
+     * ("123", "!", "?") stay with the run before them, so they never switch fonts.
+     */
+    fun splitScriptRuns(word: String): List<ScriptRun> {
+        val runs = mutableListOf<ScriptRun>()
+        for (c in word) {
+            val sinhala = isSinhalaChar(c)
+            val neutral = !sinhala && !c.isLetter()
+            val last = runs.lastOrNull()
+            when {
+                last == null -> runs.add(ScriptRun(c.toString(), sinhala))
+                neutral || last.isSinhala == sinhala -> runs[runs.lastIndex] = last.copy(text = last.text + c)
+                else -> runs.add(ScriptRun(c.toString(), sinhala))
+            }
+        }
+        return runs
+    }
+
+    /**
+     * Like [splitScriptRuns] but also applies FM conversion (Sinhala runs, legacy mode only)
+     * and uppercase (English runs only), so the renderer can draw each run in its own font.
+     */
+    fun formatRuns(word: String, isLegacyFm: Boolean, isUppercase: Boolean): List<ScriptRun> {
+        return splitScriptRuns(word).map { run ->
+            if (run.isSinhala) {
+                run.copy(text = if (isLegacyFm) unicodeToFm(run.text) else run.text)
+            } else {
+                run.copy(text = if (isUppercase) run.text.uppercase() else run.text)
+            }
+        }
+    }
 }

@@ -97,27 +97,9 @@ fun ExportDialog(
 
     val animatedProgress by animateFloatAsState(targetValue = renderProgress, label = "renderProgress")
 
-    LaunchedEffect(isRendering) {
-        if (isRendering) {
-            renderProgress = 0f
-            isRenderComplete = false
-            renderStageText = "Initializing 1080p canvas..."
-            delay(400)
-            renderProgress = 0.25f
-            renderStageText = "Rendering Sinhala Unicode typography..."
-            delay(600)
-            renderProgress = 0.60f
-            renderStageText = "Synthesizing karaoke word-level sync..."
-            delay(700)
-            renderProgress = 0.90f
-            renderStageText = "Encoding H.264 high-bitrate MP4..."
-            delay(500)
-            renderProgress = 1.0f
-            renderStageText = "Export Complete! 1080p MP4 ready."
-            isRenderComplete = true
-            isRendering = false
-        }
-    }
+    // NOTE: Burned-in video export is NOT implemented yet. The old version only faked progress
+    // with delays and never wrote a file. The render button stays disabled until a real
+    // renderer (e.g. Media3 Transformer) is added. SRT/VTT/text export still works below.
 
     val formattedContent = remember(selectedFormat, captions) {
         when (selectedFormat) {
@@ -294,8 +276,8 @@ fun ExportDialog(
                     // Render or Share Action Button
                     if (!isRenderComplete) {
                         Button(
-                            onClick = { isRendering = true },
-                            enabled = !isRendering,
+                            onClick = { },
+                            enabled = false,
                             colors = ButtonDefaults.buttonColors(containerColor = NeonCyan, contentColor = Color.White),
                             shape = RoundedCornerShape(10.dp),
                             modifier = Modifier
@@ -306,7 +288,7 @@ fun ExportDialog(
                             Icon(Icons.Default.Movie, contentDescription = null, modifier = Modifier.size(18.dp))
                             Spacer(modifier = Modifier.width(6.dp))
                             Text(
-                                if (isRendering) "Rendering $selectedResolution Video..." else "Render $selectedResolution Video",
+                                "Video export coming soon (use SRT/VTT)",
                                 fontFamily = OutfitFontFamily,
                                 fontWeight = FontWeight.Bold
                             )

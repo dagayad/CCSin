@@ -79,26 +79,40 @@ class CaptionAiService(private val context: android.content.Context? = null) {
         return com.example.SinCcApplication.ensureFirebaseInitialized(ctx)
     }
 
-    // Dynamic model getters that ensure explicit FirebaseApp is initialized and bound before access
-    private val captionModel: com.google.firebase.ai.GenerativeModel
-        get() {
-            val app = getFirebaseApp()
-            return com.google.firebase.ai.FirebaseAI.getInstance(app).generativeModel(
-                modelName = "gemini-3.8-flash",
-                generationConfig = generationConfig {
-                    responseMimeType = "application/json"
-                    responseSchema = captionsResponseSchema
-                }
-            )
-        }
+    // Single place to change the Gemini model name. Verify it against the Firebase AI Logic docs
+    // if calls fail with "model not found" in logcat.
+    private val modelName = "gemini-3.8-flash"
 
-    private val textModel: com.google.firebase.ai.GenerativeModel
-        get() {
-            val app = getFirebaseApp()
-            return com.google.firebase.ai.FirebaseAI.getInstance(app).generativeModel(
-                modelName = "gemini-3.8-flash"
-            )
+    // Models are created once and reused (previously a new instance was built on every call).
+    // Lazy init runs after ensureFirebase()/getFirebaseApp(), so Firebase is always ready first.
+    private val captionModel: com.google.firebase.ai.GenerativeModel by lazy {
+        com.google.firebase.ai.FirebaseAI.getInstance(getFirebaseApp()).generativeModel(
+            modelName = modelName,
+            generationConfig = generationConfig {
+                responseMimeType = "application/json"
+                responseSchema = captionsResponseSchema
+            }
+        )
+    }
+
+    private val textModel: com.google.firebase.ai.GenerativeModel by lazy {
+        com.google.firebase.ai.FirebaseAI.getInstance(getFirebaseApp()).generativeModel(
+            modelName = modelName
+        )
+    }
+
+    /**
+     * Pulls the first JSON object out of a model reply. Handles ```json fences and any
+     * prose around the object. Throws a clear error instead of a random parse failure.
+     */
+    private fun extractJsonObject(text: String): JSONObject {
+        val start = text.indexOf('{')
+        val end = text.lastIndexOf('}')
+        if (start == -1 || end <= start) {
+            throw IllegalStateException("AI reply did not contain JSON. Try again.")
         }
+        return JSONObject(text.substring(start, end + 1))
+    }
 
     /**
      * Automatically breaks speech, audio notes, or scripts into word-synchronized
@@ -309,8 +323,7 @@ class CaptionAiService(private val context: android.content.Context? = null) {
             }
 
             val text = response.text.orEmpty()
-            val cleanJson = text.substringAfter("{").substringBeforeLast("}")
-            val json = JSONObject("{$cleanJson}")
+            val json = extractJsonObject(text)
 
             val hooksArr = json.optJSONArray("hooks")
             val hooks = mutableListOf<String>()
@@ -379,8 +392,7 @@ class CaptionAiService(private val context: android.content.Context? = null) {
             }
 
             val text = response.text.orEmpty()
-            val cleanJson = text.substringAfter("{").substringBeforeLast("}")
-            val json = JSONObject("{$cleanJson}")
+            val json = extractJsonObject(text)
 
             val textColor = json.optString("primaryTextColorHex", "#FFFFFF")
             val highlightColor = json.optString("highlightColorHex", "#FACC15")

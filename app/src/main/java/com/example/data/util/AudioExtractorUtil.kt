@@ -129,7 +129,9 @@ object AudioExtractorUtil {
 
             if (outputFile.exists() && outputFile.length() > 0) {
                 val bytes = outputFile.readBytes()
-                val durationMs = if (totalAudioDurationUs > 0) totalAudioDurationUs / 1000L else 15000L
+                // Report the length actually extracted, not the full track length
+                val trackMs = if (totalAudioDurationUs > 0) totalAudioDurationUs / 1000L else 15000L
+                val durationMs = if (maxDurationMs > 0) minOf(trackMs, maxDurationMs) else trackMs
                 Log.d(TAG, "Audio successfully extracted: ${bytes.size} bytes, duration: ${durationMs}ms")
                 ExtractedAudio(
                     audioBytes = bytes,
@@ -150,9 +152,10 @@ object AudioExtractorUtil {
             // Fallback: read the whole video directly. Keep it small: Firebase AI Logic caps the
             // whole request at 20 MB of inline data and base64 adds ~33% on top of the raw bytes.
             try {
+                // input.available() is unreliable for content:// URIs, so ask for the real size first
+                val size = context.contentResolver.openAssetFileDescriptor(videoUri, "r")?.use { it.length } ?: -1L
                 context.contentResolver.openInputStream(videoUri)?.use { input ->
-                    val available = input.available()
-                    if (available in 1..(8 * 1024 * 1024)) {
+                    if (size in 1..(8L * 1024 * 1024)) {
                         val videoBytes = input.readBytes()
                         return@withContext ExtractedAudio(
                             audioBytes = videoBytes,

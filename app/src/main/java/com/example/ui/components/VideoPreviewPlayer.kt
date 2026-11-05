@@ -55,7 +55,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -293,9 +295,18 @@ fun VideoPreviewPlayer(
                                         val formatted = com.example.data.font.SinhalaUnicodeConverter.formatWord(rawWord, isLegacyFm, style.isUppercase)
                                         val fontToUse = if (formatted.isSinhala) chosenFont else englishFont
                                         val displayedWord = formatted.displayText
+                                        // Each script run gets its own font, so "AIය" draws AI in English font
+                                        val parts = remember(rawWord, isLegacyFm, style.isUppercase) {
+                                            com.example.data.font.SinhalaUnicodeConverter.formatRuns(rawWord, isLegacyFm, style.isUppercase)
+                                        }
 
                                         Text(
-                                            text = "$displayedWord ",
+                                            text = buildAnnotatedString {
+                                                parts.forEach { part ->
+                                                    withStyle(SpanStyle(fontFamily = if (part.isSinhala) chosenFont else englishFont)) { append(part.text) }
+                                                }
+                                                append(" ")
+                                            },
                                             fontFamily = fontToUse,
                                             fontWeight = curWordWeight,
                                             fontStyle = fontStyle,
@@ -329,9 +340,17 @@ fun VideoPreviewPlayer(
                                             if (style.isUppercase) rawWord.uppercase() else rawWord
                                         }
                                         val wordWeight = if (style.isBold) FontWeight.ExtraBold else baseWeight
+                                        val parts = remember(rawWord, isLegacyFm, style.isUppercase) {
+                                            com.example.data.font.SinhalaUnicodeConverter.formatRuns(rawWord, isLegacyFm, style.isUppercase)
+                                        }
 
                                         Text(
-                                            text = "$displayedWord ",
+                                            text = buildAnnotatedString {
+                                                parts.forEach { part ->
+                                                    withStyle(SpanStyle(fontFamily = if (part.isSinhala) chosenFont else englishFont)) { append(part.text) }
+                                                }
+                                                append(" ")
+                                            },
                                             fontFamily = fontToUse,
                                             fontWeight = wordWeight,
                                             fontStyle = fontStyle,

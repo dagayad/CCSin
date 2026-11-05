@@ -74,6 +74,24 @@ class CaptionAiService(private val context: android.content.Context? = null) {
         )
     )
 
+    // Audio path: segment timings only. Word-level arrays made the model output several times
+    // longer, which was the main reason auto-captions were slow. Words are spread evenly inside
+    // each segment by parseCaptionsJson, which is accurate enough for 3-6 word chunks.
+    private val audioCaptionsSchema = Schema.obj(
+        properties = mapOf(
+            "captions" to Schema.array(
+                items = Schema.obj(
+                    properties = mapOf(
+                        "startMs" to Schema.integer(description = "Segment start in milliseconds"),
+                        "endMs" to Schema.integer(description = "Segment end in milliseconds"),
+                        "text" to Schema.string(description = "Caption text, 3 to 6 words")
+                    )
+                ),
+                description = "Synchronized caption segments in spoken order"
+            )
+        )
+    )
+
     private fun getFirebaseApp(): com.google.firebase.FirebaseApp {
         val ctx = context ?: com.example.SinCcApplication.instance
         return com.example.SinCcApplication.ensureFirebaseInitialized(ctx)
@@ -91,6 +109,16 @@ class CaptionAiService(private val context: android.content.Context? = null) {
             generationConfig = generationConfig {
                 responseMimeType = "application/json"
                 responseSchema = captionsResponseSchema
+            }
+        )
+    }
+
+    private val audioModel: com.google.firebase.ai.GenerativeModel by lazy {
+        com.google.firebase.ai.FirebaseAI.getInstance(getFirebaseApp()).generativeModel(
+            modelName = modelName,
+            generationConfig = generationConfig {
+                responseMimeType = "application/json"
+                responseSchema = audioCaptionsSchema
             }
         )
     }
@@ -191,9 +219,8 @@ class CaptionAiService(private val context: android.content.Context? = null) {
                 
                 2. PRECISE REAL-TIME WORD TIMING (ZERO DELAY):
                    - Start each caption segment at the exact moment speech begins in the audio.
-                   - Provide word-level timing (word, startMs, endMs) matching the exact timestamps when each word is spoken.
+                   - Give segment timings that match when each phrase starts and ends in the audio.
                    - Chunks must be punchy: 3 to 6 words per line max for high mobile video retention.
-                   - Ensure words[0].startMs == segment.startMs and words.last().endMs == segment.endMs.
                 
                 Adhere strictly to the JSON schema output.
             """.trimIndent()
@@ -207,7 +234,7 @@ class CaptionAiService(private val context: android.content.Context? = null) {
             )
 
             val response = withTimeout(60_000L) {
-                captionModel.generateContent(contentPayload)
+                audioModel.generateContent(contentPayload)
             }
 
             val jsonText = response.text ?: throw IllegalStateException("AI returned an empty response")

@@ -184,6 +184,26 @@ class StudioViewModel(application: Application) : AndroidViewModel(application) 
      */
     fun autoGenerateCaptionsFromVideoAudio(context: android.content.Context, uri: android.net.Uri) {
         viewModelScope.launch {
+            // Same video as before: load the saved captions instantly, no AI call
+            val cacheKey = com.example.data.cache.CaptionCache.keyFor(uri.toString(), _totalDurationMs.value)
+            com.example.data.cache.CaptionCache.load(context, cacheKey)?.takeIf { it.isNotEmpty() }?.let { cached ->
+                _captions.value = cached
+                recalculateDuration()
+                autoPersistProject()
+                val fullText = cached.joinToString(" ") { it.text }
+                val isSinhala = com.example.data.font.SinhalaUnicodeConverter.containsSinhala(fullText)
+                val isEnglish = fullText.any { it in 'a'..'z' || it in 'A'..'Z' }
+                _detectedLanguage.value = when {
+                    isSinhala && isEnglish -> "Bilingual (Sinhala + English)"
+                    isSinhala -> "Sinhala"
+                    else -> "English"
+                }
+                _audioProcessingStatus.value = "✨ Captions loaded (saved from earlier)"
+                delay(2000L)
+                _audioProcessingStatus.value = null
+                return@launch
+            }
+
             _isAiLoading.value = true
             _audioProcessingStatus.value = "Extracting video audio track..."
             _aiErrorMessage.value = null
@@ -216,6 +236,7 @@ class StudioViewModel(application: Application) : AndroidViewModel(application) 
                             _captions.value = generatedCaptions
                             recalculateDuration()
                             autoPersistProject()
+                            com.example.data.cache.CaptionCache.save(context, cacheKey, generatedCaptions)
 
                             // Detect primary language of generated captions
                             val fullText = generatedCaptions.joinToString(" ") { it.text }

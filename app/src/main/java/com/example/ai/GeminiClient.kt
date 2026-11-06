@@ -18,7 +18,7 @@ import java.net.URL
 object GeminiClient {
 
     /** Change this one line if the model name is not available for your key. */
-    const val MODEL = "gemini-2.5-flash"
+    const val MODEL = "gemini-3.8-flash"
 
     private const val BASE_URL = "https://generativelanguage.googleapis.com/v1beta/models/"
 

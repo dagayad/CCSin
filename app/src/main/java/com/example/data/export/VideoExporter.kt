@@ -166,8 +166,10 @@ object VideoExporter {
 
         override fun getText(presentationTimeUs: Long): android.text.SpannableString {
             val ms = presentationTimeUs / 1000L
+            // An empty string makes Media3 build a 0-width overlay bitmap, which fails frame processing.
+            // A single space draws nothing visible but keeps the bitmap valid.
             val caption = captions.firstOrNull { ms in it.startMs..it.endMs }
-                ?: return android.text.SpannableString("")
+                ?: return android.text.SpannableString(" ")
             val builder = SpannableStringBuilder()
             val words = SinhalaUnicodeConverter.splitWords(caption.text)
             words.forEachIndexed { index, word ->
@@ -188,6 +190,7 @@ object VideoExporter {
             if (isBold) {
                 builder.setSpan(StyleSpan(Typeface.BOLD), 0, builder.length, SpannableStringBuilder.SPAN_EXCLUSIVE_EXCLUSIVE)
             }
+            if (builder.isEmpty()) builder.append(" ")
             builder.setSpan(ForegroundColorSpan(textColor), 0, builder.length, SpannableStringBuilder.SPAN_EXCLUSIVE_EXCLUSIVE)
             return android.text.SpannableString(builder)
         }

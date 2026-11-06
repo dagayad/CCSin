@@ -134,7 +134,11 @@ fun ExportDialog(
                         renderStageText = "MP4 ready"
                         isRenderComplete = true
                     },
-                    onFailure = { renderError = "Export failed: ${it.message ?: "unknown error"}" }
+                    onFailure = { error ->
+                        // Show the Media3 error code too, so the cause is visible on the phone
+                        val code = (error as? androidx.media3.transformer.ExportException)?.errorCodeName
+                        renderError = "Export failed: " + (code?.let { "$it - " } ?: "") + (error.message ?: "unknown error")
+                    }
                 )
             }
         }

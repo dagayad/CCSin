@@ -20,8 +20,11 @@ class GeminiHttpException(val code: Int, message: String) : IllegalStateExceptio
 
 object GeminiClient {
 
-    /** Change this one line if the model name is not available for your key. */
-    const val MODEL = "gemini-3.8-flash"
+    /**
+     * Models tried in order. If one is busy (503/429) or not available for the key (404),
+     * the next one is used. Edit this list to match the models your key can use.
+     */
+    val MODELS = listOf("gemini-3.8-flash", "gemini-3.8-flash-lite", "gemini-2.5-flash")
 
     private const val BASE_URL = "https://generativelanguage.googleapis.com/v1beta/models/"
 
@@ -40,33 +43,38 @@ object GeminiClient {
      * Throws IllegalStateException with the API's error message on failure.
      */
     /**
-     * Calls Gemini and retries when the model is busy ("high demand": HTTP 429, 500 or 503).
-     * Waits 2s, 4s, then 8s between tries before giving up with a readable message.
+     * Tries each model in [MODELS]. A busy model gets one quick retry, then the next model is used.
+     * A model that is not available for this key (404) is skipped.
      */
     fun generate(
         parts: List<JSONObject>,
         responseSchema: JSONObject? = null,
         timeoutMs: Int = 60_000
     ): String {
-        var retries = 0
-        while (true) {
-            try {
-                return callOnce(parts, responseSchema, timeoutMs)
-            } catch (e: GeminiHttpException) {
-                val busy = e.code == 429 || e.code == 500 || e.code == 503
-                if (!busy) throw e
-                if (retries >= 3) {
-                    throw IllegalStateException(
-                        "AI model දැන් busy (high demand). ටික වෙලාවකින් නැවත try කරන්න.", e
-                    )
+        var lastError: GeminiHttpException? = null
+        for (model in MODELS) {
+            var retries = 0
+            while (true) {
+                try {
+                    return callOnce(model, parts, responseSchema, timeoutMs)
+                } catch (e: GeminiHttpException) {
+                    lastError = e
+                    if (e.code == 404) break
+                    val busy = e.code == 429 || e.code == 500 || e.code == 503
+                    if (!busy) throw e
+                    if (retries >= 1) break
+                    Thread.sleep(1500L)
+                    retries++
                 }
-                Thread.sleep(2000L shl retries)
-                retries++
             }
         }
+        throw IllegalStateException(
+            "AI models දැන් busy (high demand). ටික වෙලාවකින් නැවත try කරන්න.", lastError
+        )
     }
 
     private fun callOnce(
+        model: String,
         parts: List<JSONObject>,
         responseSchema: JSONObject?,
         timeoutMs: Int
@@ -94,7 +102,7 @@ object GeminiClient {
             )
             .put("generationConfig", generationConfig)
 
-        val conn = (URL(BASE_URL + MODEL + ":generateContent").openConnection() as HttpURLConnection)
+        val conn = (URL(BASE_URL + model + ":generateContent").openConnection() as HttpURLConnection)
         try {
             conn.requestMethod = "POST"
             conn.connectTimeout = timeoutMs

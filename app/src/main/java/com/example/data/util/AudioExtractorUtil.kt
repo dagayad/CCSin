@@ -43,6 +43,7 @@ data class ExtractedAudio(
     }
 }
 
+@OptIn(androidx.media3.common.util.UnstableApi::class)
 object AudioExtractorUtil {
 
     /**
@@ -128,7 +129,18 @@ object AudioExtractorUtil {
             extractor = null
 
             if (outputFile.exists() && outputFile.length() > 0) {
-                val bytes = outputFile.readBytes()
+                // Shrink big audio to 32 kbps speech AAC: much smaller upload, faster captions.
+                // If compression fails, use the original audio.
+                val bytes = if (outputFile.length() > 300_000L) {
+                    val smaller = SpeechAudioCompressor.compress(context, outputFile)
+                    if (smaller != null) {
+                        try { smaller.readBytes() } finally { smaller.delete() }
+                    } else {
+                        outputFile.readBytes()
+                    }
+                } else {
+                    outputFile.readBytes()
+                }
                 // Report the length actually extracted, not the full track length
                 val trackMs = if (totalAudioDurationUs > 0) totalAudioDurationUs / 1000L else 15000L
                 val durationMs = if (maxDurationMs > 0) minOf(trackMs, maxDurationMs) else trackMs

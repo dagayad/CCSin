@@ -118,6 +118,7 @@ fun VideoPreviewPlayer(
     isFullscreenMode: Boolean = false,
     onExitFullscreen: () -> Unit = {},
     onPlaybackPosition: (Long) -> Unit = {},
+    onStyleChange: (CaptionStyle) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     // The video's own position is the playhead while a video is loaded (see TextureVideoPlayer)
@@ -132,6 +133,9 @@ fun VideoPreviewPlayer(
             captions.find { currentPlayheadMs in it.startMs..it.endMs }
         }
     }
+
+    // Fullscreen shows captions bigger, using the user's fullscreen size setting
+    val captionSizeScale = if (isFullscreenMode) style.fullscreenCaptionScale else 1f
 
     val ratio = remember(aspectRatioStr) {
         when (aspectRatioStr) {
@@ -195,6 +199,7 @@ fun VideoPreviewPlayer(
                     isFullscreenMode = true,
                     onExitFullscreen = exitFullscreen,
                     onPlaybackPosition = { videoPosMs = it },
+                    onStyleChange = onStyleChange,
                     modifier = Modifier.fillMaxSize()
                 )
             }
@@ -289,6 +294,17 @@ fun VideoPreviewPlayer(
                     SafeZoneOverlay()
                 }
 
+                // Fullscreen only: caption size and words-per-line controls
+                if (isFullscreenMode) {
+                    CaptionFullscreenControls(
+                        style = style,
+                        onStyleChange = onStyleChange,
+                        modifier = Modifier
+                            .align(Alignment.TopEnd)
+                            .padding(8.dp)
+                    )
+                }
+
                 // Render Live Subtitle Caption Overlay
                 activeCaption?.let { cap ->
                     val align = when (style.position) {
@@ -336,12 +352,16 @@ fun VideoPreviewPlayer(
                                 .padding(horizontal = 10.dp, vertical = 6.dp)
                         ) {
                             if (style.animation == CaptionAnimation.KARAOKE_POP && cap.words.isNotEmpty()) {
+                                // Words per line: 0 = auto (one flowing line), otherwise break every N words
+                                val wordLines = if (style.wordsPerLine > 0) cap.words.chunked(style.wordsPerLine) else listOf(cap.words)
+                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                wordLines.forEach { lineWords ->
                                 FlowRow(
                                     horizontalArrangement = Arrangement.Center,
                                     verticalArrangement = Arrangement.Center,
-                                    modifier = Modifier.widthIn(max = 280.dp)
+                                    modifier = Modifier.widthIn(max = 280.dp * captionSizeScale)
                                 ) {
-                                    cap.words.forEach { wordItem ->
+                                    lineWords.forEach { wordItem ->
                                         val isWordActive = currentPlayheadMs in wordItem.startMs..wordItem.endMs
                                         val curWordColor = if (isWordActive) highlightColor else textColor
                                         val wordScale = if (isWordActive) 1.15f else 1.0f
@@ -373,8 +393,8 @@ fun VideoPreviewPlayer(
                                             fontWeight = curWordWeight,
                                             fontStyle = fontStyle,
                                             textDecoration = textDecoration,
-                                            fontSize = style.fontSizeSp.sp,
-                                            lineHeight = (style.fontSizeSp * 1.08f).sp,
+                                            fontSize = (style.fontSizeSp * captionSizeScale).sp,
+                                            lineHeight = (style.fontSizeSp * 1.08f * captionSizeScale).sp,
                                             color = curWordColor,
                                             style = TextStyle(shadow = textShadow),
                                             textAlign = TextAlign.Center,
@@ -384,6 +404,8 @@ fun VideoPreviewPlayer(
                                         )
                                     }
                                 }
+                                }
+                                }
                             } else {
                                 val words = remember(cap.text) {
                                     com.example.data.font.SinhalaUnicodeConverter.splitWords(cap.text)
@@ -391,7 +413,7 @@ fun VideoPreviewPlayer(
                                 FlowRow(
                                     horizontalArrangement = Arrangement.Center,
                                     verticalArrangement = Arrangement.Center,
-                                    modifier = Modifier.widthIn(max = 280.dp)
+                                    modifier = Modifier.widthIn(max = 280.dp * captionSizeScale)
                                 ) {
                                     words.forEach { rawWord ->
                                         val isSinhala = com.example.data.font.SinhalaUnicodeConverter.containsSinhala(rawWord)
@@ -419,8 +441,8 @@ fun VideoPreviewPlayer(
                                             fontWeight = wordWeight,
                                             fontStyle = fontStyle,
                                             textDecoration = textDecoration,
-                                            fontSize = style.fontSizeSp.sp,
-                                            lineHeight = (style.fontSizeSp * 1.08f).sp,
+                                            fontSize = (style.fontSizeSp * captionSizeScale).sp,
+                                            lineHeight = (style.fontSizeSp * 1.08f * captionSizeScale).sp,
                                             color = textColor,
                                             style = TextStyle(shadow = textShadow),
                                             textAlign = TextAlign.Center,
@@ -777,4 +799,49 @@ private fun TextureVideoPlayer(
         },
         modifier = modifier
     )
+}
+
+/** Fullscreen-only controls: caption size and words per line. Saved in the project style. */
+@Composable
+private fun CaptionFullscreenControls(
+    style: CaptionStyle,
+    onStyleChange: (CaptionStyle) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Surface(
+        shape = RoundedCornerShape(12.dp),
+        color = Color(0xCC000000),
+        modifier = modifier
+    ) {
+        Column(modifier = Modifier.padding(6.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    "Size ${(style.fullscreenCaptionScale * 100).toInt()}%",
+                    color = Color.White,
+                    fontSize = 12.sp,
+                    modifier = Modifier.width(130.dp)
+                )
+                IconButton(onClick = {
+                    onStyleChange(style.copy(fullscreenCaptionScale = (style.fullscreenCaptionScale - 0.1f).coerceIn(0.5f, 3f)))
+                }) { Text("-", color = Color.White, fontSize = 18.sp) }
+                IconButton(onClick = {
+                    onStyleChange(style.copy(fullscreenCaptionScale = (style.fullscreenCaptionScale + 0.1f).coerceIn(0.5f, 3f)))
+                }) { Text("+", color = Color.White, fontSize = 18.sp) }
+            }
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    if (style.wordsPerLine == 0) "Words/line: Auto" else "Words/line: ${style.wordsPerLine}",
+                    color = Color.White,
+                    fontSize = 12.sp,
+                    modifier = Modifier.width(130.dp)
+                )
+                IconButton(onClick = { onStyleChange(style.copy(wordsPerLine = (style.wordsPerLine - 1).coerceAtLeast(0))) }) {
+                    Text("-", color = Color.White, fontSize = 18.sp)
+                }
+                IconButton(onClick = { onStyleChange(style.copy(wordsPerLine = (style.wordsPerLine + 1).coerceAtMost(8))) }) {
+                    Text("+", color = Color.White, fontSize = 18.sp)
+                }
+            }
+        }
+    }
 }

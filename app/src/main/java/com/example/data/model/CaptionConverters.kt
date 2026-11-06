@@ -96,6 +96,8 @@ object CaptionConverters {
             put("hasStroke", style.hasStroke)
             put("strokeWidthPx", style.strokeWidthPx.toDouble())
             put("showSafeZone", style.showSafeZone)
+            put("fullscreenCaptionScale", style.fullscreenCaptionScale.toDouble())
+            put("wordsPerLine", style.wordsPerLine)
         }.toString()
     }
 
@@ -125,7 +127,9 @@ object CaptionConverters {
                 hasShadow = obj.optBoolean("hasShadow", true),
                 hasStroke = obj.optBoolean("hasStroke", true),
                 strokeWidthPx = obj.optDouble("strokeWidthPx", 3.0).toFloat(),
-                showSafeZone = obj.optBoolean("showSafeZone", false)
+                showSafeZone = obj.optBoolean("showSafeZone", false),
+                fullscreenCaptionScale = obj.optDouble("fullscreenCaptionScale", 1.8).toFloat(),
+                wordsPerLine = obj.optInt("wordsPerLine", 0)
             )
         } catch (_: Exception) {
             CaptionStyle()

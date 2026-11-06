@@ -200,7 +200,8 @@ fun StudioMainScreen(
                                     onPlayPauseToggle = { viewModel.togglePlayPause() },
                                     onSeek = { viewModel.seekTo(it) },
                                     onRestart = { viewModel.restartPlayback() },
-                                    onToggleSafeZone = { viewModel.toggleSafeZone() }
+                                    onToggleSafeZone = { viewModel.toggleSafeZone() },
+                                    onStyleChange = { viewModel.updateStyle(it) }
                                 )
                             }
 
@@ -258,7 +259,8 @@ fun StudioMainScreen(
                                 onPlayPauseToggle = { viewModel.togglePlayPause() },
                                 onSeek = { viewModel.seekTo(it) },
                                 onRestart = { viewModel.restartPlayback() },
-                                onToggleSafeZone = { viewModel.toggleSafeZone() }
+                                onToggleSafeZone = { viewModel.toggleSafeZone() },
+                                onStyleChange = { viewModel.updateStyle(it) }
                             )
 
                             Spacer(modifier = Modifier.height(4.dp))
@@ -301,7 +303,8 @@ fun StudioMainScreen(
                                     onPlayPauseToggle = { viewModel.togglePlayPause() },
                                     onSeek = { viewModel.seekTo(it) },
                                     onRestart = { viewModel.restartPlayback() },
-                                    onToggleSafeZone = { viewModel.toggleSafeZone() }
+                                    onToggleSafeZone = { viewModel.toggleSafeZone() },
+                                    onStyleChange = { viewModel.updateStyle(it) }
                                 )
                             }
                             Box(

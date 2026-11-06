@@ -228,5 +228,8 @@ data class CaptionStyle(
     val hasShadow: Boolean = true,
     val hasStroke: Boolean = true,
     val strokeWidthPx: Float = 3f,
-    val showSafeZone: Boolean = false
+    val showSafeZone: Boolean = false,
+    // Fullscreen-only size multiplier (1.0 = same as preview) and words per line (0 = auto)
+    val fullscreenCaptionScale: Float = 1.8f,
+    val wordsPerLine: Int = 0
 )

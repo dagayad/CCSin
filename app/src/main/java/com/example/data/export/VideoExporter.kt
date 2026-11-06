@@ -68,7 +68,8 @@ object VideoExporter {
             isLegacyFm = isLegacyFm,
             isUppercase = style.isUppercase,
             isBold = style.isBold,
-            textColor = parseColor(style.textColorHex, 0xFFFFFFFF.toInt())
+            textColor = parseColor(style.textColorHex, 0xFFFFFFFF.toInt()),
+            wordsPerLine = style.wordsPerLine
         )
 
         val effects = Effects(
@@ -159,7 +160,8 @@ object VideoExporter {
         private val isLegacyFm: Boolean,
         private val isUppercase: Boolean,
         private val isBold: Boolean,
-        private val textColor: Int
+        private val textColor: Int,
+        private val wordsPerLine: Int
     ) : TextOverlay() {
 
         override fun getText(presentationTimeUs: Long): android.text.SpannableString {
@@ -179,7 +181,9 @@ object VideoExporter {
                         SpannableStringBuilder.SPAN_EXCLUSIVE_EXCLUSIVE
                     )
                 }
-                if (index != words.lastIndex) builder.append(' ')
+                if (index != words.lastIndex) {
+                    builder.append(if (wordsPerLine > 0 && (index + 1) % wordsPerLine == 0) '\n' else ' ')
+                }
             }
             if (isBold) {
                 builder.setSpan(StyleSpan(Typeface.BOLD), 0, builder.length, SpannableStringBuilder.SPAN_EXCLUSIVE_EXCLUSIVE)

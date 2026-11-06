@@ -23,6 +23,9 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import java.util.UUID
 
+/** Longest stretch of a video that auto-caption will process (matches the 5 minute budget). */
+private const val MAX_AUTO_CAPTION_MS = 300_000L
+
 class StudioViewModel(application: Application) : AndroidViewModel(application) {
 
     init {
@@ -72,6 +75,10 @@ class StudioViewModel(application: Application) : AndroidViewModel(application) 
 
     private val _audioProcessingStatus = MutableStateFlow<String?>(null)
     val audioProcessingStatus: StateFlow<String?> = _audioProcessingStatus.asStateFlow()
+
+    // Auto-caption step: 0 = idle, 1 separating audio, 2 uploading, 3 generating, 4 aligning words
+    private val _captionStage = MutableStateFlow(0)
+    val captionStage: StateFlow<Int> = _captionStage.asStateFlow()
 
     private val _detectedLanguage = MutableStateFlow<String?>(null)
     val detectedLanguage: StateFlow<String?> = _detectedLanguage.asStateFlow()
@@ -205,14 +212,21 @@ class StudioViewModel(application: Application) : AndroidViewModel(application) 
             }
 
             _isAiLoading.value = true
-            _audioProcessingStatus.value = "Extracting video audio track..."
+            val totalMs = _totalDurationMs.value
+            val limitMs = if (totalMs > 0) minOf(totalMs, MAX_AUTO_CAPTION_MS) else MAX_AUTO_CAPTION_MS
+            _captionStage.value = 1
+            _audioProcessingStatus.value = if (totalMs > MAX_AUTO_CAPTION_MS) {
+                "Video is longer than 5 minutes. Captioning the first 5 minutes..."
+            } else {
+                "Extracting video audio track..."
+            }
             _aiErrorMessage.value = null
 
             try {
                 val extracted = com.example.data.util.AudioExtractorUtil.extractAudioFromVideo(
                     context = context,
                     videoUri = uri,
-                    maxDurationMs = _totalDurationMs.value
+                    maxDurationMs = limitMs
                 )
 
                 if (!extracted.hasAudio || extracted.audioBytes.isEmpty()) {
@@ -223,13 +237,16 @@ class StudioViewModel(application: Application) : AndroidViewModel(application) 
                     return@launch
                 }
 
+                _captionStage.value = 2
                 _audioProcessingStatus.value = "AI listening & detecting language (Sinhala / English)..."
 
                 val result = aiService.generateCaptionsFromAudio(
                     audioBytes = extracted.audioBytes,
-                    mimeType = extracted.mimeType
+                    mimeType = extracted.mimeType,
+                    onUploaded = { _captionStage.value = 3 }
                 )
 
+                _captionStage.value = 4
                 result.fold(
                     onSuccess = { generatedCaptions ->
                         if (generatedCaptions.isNotEmpty()) {
@@ -265,6 +282,7 @@ class StudioViewModel(application: Application) : AndroidViewModel(application) 
                 _audioProcessingStatus.value = "Error processing video audio"
             } finally {
                 _isAiLoading.value = false
+                _captionStage.value = 0
                 delay(4000L)
                 _audioProcessingStatus.value = null
             }

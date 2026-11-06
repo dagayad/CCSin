@@ -133,7 +133,8 @@ class CaptionAiService(@Suppress("UNUSED_PARAMETER") private val context: androi
      */
     suspend fun generateCaptionsFromAudio(
         audioBytes: ByteArray,
-        mimeType: String = "audio/mp4"
+        mimeType: String = "audio/mp4",
+        onUploaded: () -> Unit = {}
     ): Result<List<CaptionItem>> = withContext(Dispatchers.IO) {
         try {
             val prompt = """
@@ -156,19 +157,22 @@ class CaptionAiService(@Suppress("UNUSED_PARAMETER") private val context: androi
                 Adhere strictly to the JSON schema output.
             """.trimIndent()
 
-            val jsonText = withTimeout(120_000L) {
+            // Up to 5 minutes of audio: allow up to 5 minutes for the whole job
+            val jsonText = withTimeout(300_000L) {
                 GeminiClient.generate(
                     listOf(
                         GeminiClient.inlinePart(audioBytes, mimeType),
                         GeminiClient.textPart(prompt)
                     ),
-                    captionsSchema
+                    captionsSchema,
+                    timeoutMs = 240_000,
+                    onUploaded = onUploaded
                 )
             }
             Result.success(parseCaptionsJson(jsonText))
         } catch (e: TimeoutCancellationException) {
             Log.e(TAG, "Audio caption generation timed out", e)
-            Result.failure(Exception("Audio speech recognition timed out after 120s. Please try again."))
+            Result.failure(Exception("Audio speech recognition timed out after 5 minutes. Please try again."))
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {

@@ -49,14 +49,15 @@ object GeminiClient {
     fun generate(
         parts: List<JSONObject>,
         responseSchema: JSONObject? = null,
-        timeoutMs: Int = 60_000
+        timeoutMs: Int = 60_000,
+        onUploaded: (() -> Unit)? = null
     ): String {
         var lastError: GeminiHttpException? = null
         for (model in MODELS) {
             var retries = 0
             while (true) {
                 try {
-                    return callOnce(model, parts, responseSchema, timeoutMs)
+                    return callOnce(model, parts, responseSchema, timeoutMs, onUploaded)
                 } catch (e: GeminiHttpException) {
                     lastError = e
                     if (e.code == 404) break
@@ -77,7 +78,8 @@ object GeminiClient {
         model: String,
         parts: List<JSONObject>,
         responseSchema: JSONObject?,
-        timeoutMs: Int
+        timeoutMs: Int,
+        onUploaded: (() -> Unit)?
     ): String {
         // The key the user typed in the app wins. The build-time key is only a fallback.
         val apiKey = ApiKeyStore.userKey().ifBlank { BuildConfig.GEMINI_API_KEY }
@@ -112,6 +114,8 @@ object GeminiClient {
             conn.setRequestProperty("x-goog-api-key", apiKey)
 
             conn.outputStream.use { it.write(body.toString().toByteArray(Charsets.UTF_8)) }
+            // The request body is sent; from here we are waiting for the model's answer.
+            onUploaded?.invoke()
 
             val code = conn.responseCode
             val stream = if (code in 200..299) conn.inputStream else conn.errorStream

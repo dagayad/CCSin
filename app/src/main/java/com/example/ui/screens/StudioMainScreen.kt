@@ -97,6 +97,7 @@ fun StudioMainScreen(
     val selectedVideoName by viewModel.selectedVideoName.collectAsState()
     val selectedVideoResolution by viewModel.selectedVideoResolution.collectAsState()
     val audioProcessingStatus by viewModel.audioProcessingStatus.collectAsState()
+    val captionStage by viewModel.captionStage.collectAsState()
     val detectedLanguage by viewModel.detectedLanguage.collectAsState()
 
     val context = LocalContext.current
@@ -184,6 +185,7 @@ fun StudioMainScreen(
 
                                 AudioStatusBanner(
                                     audioProcessingStatus = audioProcessingStatus,
+                                    captionStage = captionStage,
                                     isAiLoading = isAiLoading
                                 )
 
@@ -245,6 +247,7 @@ fun StudioMainScreen(
 
                             AudioStatusBanner(
                                 audioProcessingStatus = audioProcessingStatus,
+                                captionStage = captionStage,
                                 isAiLoading = isAiLoading
                             )
 
@@ -653,7 +656,8 @@ private fun VideoHeaderBar(
 @Composable
 private fun AudioStatusBanner(
     audioProcessingStatus: String?,
-    isAiLoading: Boolean
+    isAiLoading: Boolean,
+    captionStage: Int = 0
 ) {
     if (audioProcessingStatus == null) return
     Surface(
@@ -664,10 +668,8 @@ private fun AudioStatusBanner(
             .fillMaxWidth()
             .padding(horizontal = 4.dp, vertical = 3.dp)
     ) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
-        ) {
+        Column(modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
             if (isAiLoading) {
                 androidx.compose.material3.CircularProgressIndicator(
                     color = NeonCyan,
@@ -691,6 +693,48 @@ private fun AudioStatusBanner(
                 fontFamily = OutfitFontFamily,
                 modifier = Modifier.weight(1f)
             )
+        }
+            if (captionStage in 1..4) CaptionStepsList(captionStage)
+        }
+    }
+}
+
+private val captionStepLabels = listOf(
+    "Separating audio",
+    "Uploading audio",
+    "Generating captions",
+    "Aligning word timing"
+)
+
+/** The four auto-caption steps: done (check), running (spinner) or waiting (circle). */
+@Composable
+private fun CaptionStepsList(stage: Int) {
+    Column(modifier = Modifier.padding(top = 6.dp)) {
+        captionStepLabels.forEachIndexed { index, label ->
+            val step = index + 1
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.padding(vertical = 2.dp)
+            ) {
+                Box(modifier = Modifier.size(14.dp), contentAlignment = Alignment.Center) {
+                    when {
+                        stage > step -> Text("✓", fontSize = 11.sp, color = NeonCyan, fontWeight = FontWeight.Bold)
+                        stage == step -> androidx.compose.material3.CircularProgressIndicator(
+                            color = NeonCyan,
+                            strokeWidth = 2.dp,
+                            modifier = Modifier.size(12.dp)
+                        )
+                        else -> Text("○", fontSize = 11.sp, color = Color.White.copy(alpha = 0.4f))
+                    }
+                }
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = label,
+                    fontSize = 11.sp,
+                    color = if (stage >= step) Color.White else Color.White.copy(alpha = 0.5f),
+                    fontFamily = OutfitFontFamily
+                )
+            }
         }
     }
 }

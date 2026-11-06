@@ -15,6 +15,9 @@ import java.net.URL
  *
  * Call from a background thread (callers already use Dispatchers.IO).
  */
+/** An HTTP error from the Gemini API, carrying the status code so callers can decide to retry. */
+class GeminiHttpException(val code: Int, message: String) : IllegalStateException(message)
+
 object GeminiClient {
 
     /** Change this one line if the model name is not available for your key. */
@@ -36,10 +39,37 @@ object GeminiClient {
      * [responseSchema] (optional) forces the reply to match an OpenAPI-style schema as JSON.
      * Throws IllegalStateException with the API's error message on failure.
      */
+    /**
+     * Calls Gemini and retries when the model is busy ("high demand": HTTP 429, 500 or 503).
+     * Waits 2s, 4s, then 8s between tries before giving up with a readable message.
+     */
     fun generate(
         parts: List<JSONObject>,
         responseSchema: JSONObject? = null,
         timeoutMs: Int = 60_000
+    ): String {
+        var retries = 0
+        while (true) {
+            try {
+                return callOnce(parts, responseSchema, timeoutMs)
+            } catch (e: GeminiHttpException) {
+                val busy = e.code == 429 || e.code == 500 || e.code == 503
+                if (!busy) throw e
+                if (retries >= 3) {
+                    throw IllegalStateException(
+                        "AI model දැන් busy (high demand). ටික වෙලාවකින් නැවත try කරන්න.", e
+                    )
+                }
+                Thread.sleep(2000L shl retries)
+                retries++
+            }
+        }
+    }
+
+    private fun callOnce(
+        parts: List<JSONObject>,
+        responseSchema: JSONObject?,
+        timeoutMs: Int
     ): String {
         // The key the user typed in the app wins. The build-time key is only a fallback.
         val apiKey = ApiKeyStore.userKey().ifBlank { BuildConfig.GEMINI_API_KEY }
@@ -83,7 +113,7 @@ object GeminiClient {
                 val message = runCatching {
                     JSONObject(raw).getJSONObject("error").getString("message")
                 }.getOrDefault(raw.take(300))
-                throw IllegalStateException("Gemini error $code: $message")
+                throw GeminiHttpException(code, "Gemini error $code: $message")
             }
 
             val parsed = JSONObject(raw)

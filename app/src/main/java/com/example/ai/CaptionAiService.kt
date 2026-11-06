@@ -112,13 +112,13 @@ class CaptionAiService(@Suppress("UNUSED_PARAMETER") private val context: androi
                    - Segments follow each other in order with no overlap.
             """.trimIndent()
 
-            val jsonText = withTimeout(60_000L) {
+            val jsonText = withTimeout(120_000L) {
                 GeminiClient.generate(listOf(GeminiClient.textPart(prompt)), captionsSchema)
             }
             Result.success(parseCaptionsJson(jsonText))
         } catch (e: TimeoutCancellationException) {
             Log.e(TAG, "Caption generation timed out", e)
-            Result.failure(Exception("AI captioning timed out after 60s. Please try with shorter text."))
+            Result.failure(Exception("AI captioning timed out after 120s. Please try with shorter text."))
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
@@ -156,7 +156,7 @@ class CaptionAiService(@Suppress("UNUSED_PARAMETER") private val context: androi
                 Adhere strictly to the JSON schema output.
             """.trimIndent()
 
-            val jsonText = withTimeout(60_000L) {
+            val jsonText = withTimeout(120_000L) {
                 GeminiClient.generate(
                     listOf(
                         GeminiClient.inlinePart(audioBytes, mimeType),
@@ -168,7 +168,7 @@ class CaptionAiService(@Suppress("UNUSED_PARAMETER") private val context: androi
             Result.success(parseCaptionsJson(jsonText))
         } catch (e: TimeoutCancellationException) {
             Log.e(TAG, "Audio caption generation timed out", e)
-            Result.failure(Exception("Audio speech recognition timed out after 60s. Please try again."))
+            Result.failure(Exception("Audio speech recognition timed out after 120s. Please try again."))
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
@@ -199,7 +199,7 @@ class CaptionAiService(@Suppress("UNUSED_PARAMETER") private val context: androi
                 $inputPayload
             """.trimIndent()
 
-            val jsonText = withTimeout(60_000L) {
+            val jsonText = withTimeout(120_000L) {
                 GeminiClient.generate(listOf(GeminiClient.textPart(prompt)), captionsSchema)
             }
             Result.success(parseCaptionsJson(jsonText))
@@ -327,7 +327,7 @@ class CaptionAiService(@Suppress("UNUSED_PARAMETER") private val context: androi
             val out = ByteArrayOutputStream()
             bitmap.compress(Bitmap.CompressFormat.JPEG, 85, out)
 
-            val text = withTimeout(60_000L) {
+            val text = withTimeout(120_000L) {
                 GeminiClient.generate(
                     listOf(
                         GeminiClient.inlinePart(out.toByteArray(), "image/jpeg"),

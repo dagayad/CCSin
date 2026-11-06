@@ -363,7 +363,9 @@ fun VideoPreviewPlayer(
                                         Text(
                                             text = buildAnnotatedString {
                                                 parts.forEach { part ->
-                                                    withStyle(SpanStyle(fontFamily = if (part.isSinhala) chosenFont else englishFont)) { append(part.text) }
+                                                    pushStyle(SpanStyle(fontFamily = if (part.isSinhala) chosenFont else englishFont))
+                                                    append(part.text)
+                                                    pop()
                                                 }
                                                 append(" ")
                                             },
@@ -407,7 +409,9 @@ fun VideoPreviewPlayer(
                                         Text(
                                             text = buildAnnotatedString {
                                                 parts.forEach { part ->
-                                                    withStyle(SpanStyle(fontFamily = if (part.isSinhala) chosenFont else englishFont)) { append(part.text) }
+                                                    pushStyle(SpanStyle(fontFamily = if (part.isSinhala) chosenFont else englishFont))
+                                                    append(part.text)
+                                                    pop()
                                                 }
                                                 append(" ")
                                             },
@@ -700,7 +704,8 @@ private fun TextureVideoPlayer(
             mp.setDataSource(context, videoUri)
             mp.isLooping = true
             mp.setOnPreparedListener { p ->
-                p.setVolume(if (mutedNow) 0f else 1f)
+                val vol = if (mutedNow) 0f else 1f
+                p.setVolume(vol, vol)
                 seekPlayer(p, startAtMs)
                 surfaceRef.get()?.let { p.setSurface(it) }
                 isPrepared = true
@@ -734,7 +739,8 @@ private fun TextureVideoPlayer(
 
     LaunchedEffect(isMuted, isPrepared) {
         if (!isPrepared) return@LaunchedEffect
-        player?.let { mp -> runCatching { mp.setVolume(if (isMuted) 0f else 1f) } }
+        player?.let { mp -> runCatching { val vol = if (isMuted) 0f else 1f
+        mp.setVolume(vol, vol) } }
     }
 
     // Report the video's real position about 30 times a second while playing, and less often

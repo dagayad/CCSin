@@ -162,9 +162,10 @@ object VideoExporter {
         private val textColor: Int
     ) : TextOverlay() {
 
-        override fun getText(presentationTimeUs: Long): android.text.SpannableString? {
+        override fun getText(presentationTimeUs: Long): android.text.SpannableString {
             val ms = presentationTimeUs / 1000L
-            val caption = captions.firstOrNull { ms in it.startMs..it.endMs } ?: return null
+            val caption = captions.firstOrNull { ms in it.startMs..it.endMs }
+                ?: return android.text.SpannableString("")
             val builder = SpannableStringBuilder()
             val words = SinhalaUnicodeConverter.splitWords(caption.text)
             words.forEachIndexed { index, word ->

@@ -23,11 +23,11 @@ class SinCcApplication : Application() {
 
             // 1. Initialize directly with verified FirebaseOptions (bypasses any OEM resource reader quirks)
             val options = FirebaseOptions.Builder()
-                .setApplicationId("1:1035928405174:android:c982f44feb0708a4059217")
-                .setApiKey("AIzaSyCnfEF7cjSn12Kiki0clcWrAiFiPRAI0Mo")
-                .setProjectId("gen-lang-client-0671452991")
-                .setStorageBucket("gen-lang-client-0671452991.firebasestorage.app")
-                .setGcmSenderId("1035928405174")
+                .setApplicationId("1:729010840009:android:3555d91384eaf739148818")
+                .setApiKey("AIzaSyAitz0Nkp0OdsJsrd4PDlPI9MHo0TV8CY4")
+                .setProjectId("cccc-5d0b3")
+                .setStorageBucket("cccc-5d0b3.firebasestorage.app")
+                .setGcmSenderId("729010840009")
                 .build()
 
             val appWithOptions = runCatching { FirebaseApp.initializeApp(context, options) }.getOrNull()

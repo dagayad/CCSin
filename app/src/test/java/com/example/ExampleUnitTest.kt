@@ -22,7 +22,7 @@ class ExampleUnitTest {
         val app = SinCcApplication.ensureFirebaseInitialized(context)
         println("FirebaseApp initialized: $app")
         assertNotNull(app)
-        assertEquals("gen-lang-client-0671452991", app.options.projectId)
+        assertEquals("cccc-5d0b3", app.options.projectId)
     }
 
     @Test

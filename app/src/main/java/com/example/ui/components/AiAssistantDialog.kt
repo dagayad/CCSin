@@ -1,5 +1,6 @@
 package com.example.ui.components
 
+import androidx.compose.foundation.horizontalScroll
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.net.Uri
@@ -462,13 +463,17 @@ private fun AutoCaptionTab(
             Text("⚡ Zero Delay", fontSize = 10.sp, color = EmeraldGreen, fontWeight = FontWeight.Bold)
         }
         Spacer(modifier = Modifier.height(4.dp))
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        // Scrolls sideways instead of squeezing the last chip into a vertical column on small phones
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState())
+        ) {
             listOf("Auto-Detect", "Sinhala", "Singlish", "English").forEach { lang ->
                 val isSelected = selectedLang == lang
                 FilterChip(
                     selected = isSelected,
                     onClick = { selectedLang = lang },
-                    label = { Text(lang, fontSize = 11.sp) },
+                    label = { Text(lang, fontSize = 11.sp, maxLines = 1, softWrap = false) },
                     colors = FilterChipDefaults.filterChipColors(
                         selectedContainerColor = NeonCyan.copy(alpha = 0.2f),
                         selectedLabelColor = NeonCyan

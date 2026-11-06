@@ -17,6 +17,9 @@ private const val DEBUG_STORE_PREFIX = "com.google.firebase.appcheck.debug.store
 private const val DEBUG_SECRET_KEY = "com.google.firebase.appcheck.debug.DEBUG_SECRET"
 private const val RECAPTCHA_SITE_KEY_RES = "recaptcha_site_key"
 
+// Debug-only token. Release builds never use it (they use reCAPTCHA).
+private const val FIXED_DEBUG_TOKEN = "de64817c-c6d8-48af-992f-6f941c31f91d"
+
 fun configureAppCheck(context: Context, intent: Intent?) {
     try {
         // 1. Ensure FirebaseApp is initialized with guaranteed fallback
@@ -32,7 +35,9 @@ fun configureAppCheck(context: Context, intent: Intent?) {
 
         if (BuildConfig.DEBUG) {
             // 2. Debug: Read debug token from Intent extra
-            val debugToken = intent?.getStringExtra(DEBUG_TOKEN_EXTRA)
+            // Debug builds: use the token from the intent if given, otherwise this fixed debug token.
+            // Register FIXED_DEBUG_TOKEN once in Firebase console > App Check > Apps > Manage debug tokens.
+            val debugToken = intent?.getStringExtra(DEBUG_TOKEN_EXTRA) ?: FIXED_DEBUG_TOKEN
 
             if (!debugToken.isNullOrEmpty()) {
                 val persistenceKey = app.persistenceKey

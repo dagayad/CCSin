@@ -97,7 +97,7 @@ class StudioViewModel(application: Application) : AndroidViewModel(application) 
 
     init {
         viewModelScope.launch {
-            repository.initSampleProjectsIfEmpty()
+            repository.removeSampleProjects()
             repository.projectsFlow.collect { list ->
                 if (_currentProject.value == null && list.isNotEmpty()) {
                     selectProject(list.first())

@@ -1,4 +1,5 @@
 import com.google.gms.googleservices.GoogleServicesPlugin.MissingGoogleServicesStrategy
+import java.util.Properties
 
 plugins {
   alias(libs.plugins.android.application)
@@ -10,7 +11,7 @@ plugins {
 
 // Gemini API key: read from the GEMINI_API_KEY environment variable (CI secret) or from
 // local.properties (local builds). Never commit the key itself.
-val localProps = java.util.Properties().apply {
+val localProps = Properties().apply {
   val f = rootProject.file("local.properties")
   if (f.exists()) f.inputStream().use { load(it) }
 }
